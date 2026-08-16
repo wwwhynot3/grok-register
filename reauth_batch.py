@@ -17,7 +17,7 @@ from auth_store import save_auth
 from auto_replenish import push_to_grok2api
 from patchright.async_api import async_playwright
 
-DB = os.getenv("GROK2API_DB") or '/root/workspace/grok2api/data/backend.db'
+DB = os.getenv("GROK2API_DB") or os.path.join(_BASE, "data", "backend.db")  # 未设 GROK2API_DB 时用本地路径(会明显报错而非连错库)
 MAX_ACCOUNTS = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
 SLEEP_BETWEEN = 5
 

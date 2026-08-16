@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
 
 from config import AUTH_DIR, KEYS_DIR, LOG_DIR  # noqa: E402
 
@@ -200,8 +200,8 @@ def sec_mint(days):
 
 def sec_refresh():
     conn = db_conn()
-    out = {"error": None, "total": 0, "fresh": 0, "expired": 0,
-           "failing": 0, "permanent": 0, "last_errors": []}
+    out: dict = {"error": None, "total": 0, "fresh": 0, "expired": 0, "no_expiry": 0,
+                 "failing": 0, "permanent": 0, "last_errors": []}
     if conn is None:
         out["error"] = f"GROK2API_DB 不可用: {DB_PATH}"
         return out
@@ -213,7 +213,9 @@ def sec_refresh():
     errs = {}
     for exp, fails, perm, code in rows:
         out["total"] += 1
-        if exp and exp > now_s:
+        if not exp:
+            out["no_expiry"] += 1            # 无过期时间 = SSO/常驻类凭据,非过期
+        elif exp > now_s:
             out["fresh"] += 1
         else:
             out["expired"] += 1
@@ -229,7 +231,7 @@ def sec_refresh():
 
 def sec_reauth():
     conn = db_conn()
-    out = {"pending": None, "service": systemctl_active("vps-grok-reauth")}
+    out: dict = {"pending": None, "service": systemctl_active("vps-grok-reauth")}
     if conn is not None:
         r = conn.execute("SELECT COUNT(*) FROM provider_accounts WHERE auth_status='reauthRequired'").fetchone()
         conn.close()
@@ -239,7 +241,7 @@ def sec_reauth():
 
 def sec_api(days):
     conn = db_conn()
-    out = {"window_days": days, "error": None}
+    out: dict = {"window_days": days, "error": None}
     if conn is None:
         out["error"] = f"GROK2API_DB 不可用: {DB_PATH}"
         return out
@@ -256,7 +258,7 @@ def sec_api(days):
     models = {}
     clients = {}
     durations = [r[3] for r in rows if r[3] is not None]
-    for status, model, client, dur, toks, reason, err in rows:
+    for status, model, client, *_ in rows:
         codes[str(status)] = codes.get(str(status), 0) + 1
         if model:
             models[model] = models.get(model, 0) + 1
@@ -303,7 +305,7 @@ def sec_services():
 
 def sec_nodes():
     conn = db_conn()
-    out = {"error": None, "nodes": []}
+    out: dict = {"error": None, "nodes": []}
     if conn is None:
         out["error"] = f"GROK2API_DB 不可用: {DB_PATH}"
         return out
@@ -358,8 +360,9 @@ def render(s, name, days):
     elif name == "refresh":
         if s.get("error"):
             print("  ", s["error"]); return
-        print(f"  凭据 {s['total']}: fresh {s['fresh']} / 过期 {s['expired']} | "
-              f"刷新失败中 {s['failing']} | 永久失效 {s['permanent']}")
+        print(f"  凭据 {s['total']}: fresh {s['fresh']} / 过期 {s['expired']}"
+              + (f" / 无过期时间(SSO类) {s['no_expiry']}" if s.get("no_expiry") else "")
+              + f" | 刷新失败中 {s['failing']} | 永久失效 {s['permanent']}")
         if s["last_errors"]:
             print("    最近错误: " + ", ".join(f"{c}×{n}" for c, n in s["last_errors"]))
     elif name == "reauth":

@@ -337,61 +337,62 @@ SECTIONS = {"pool": sec_pool, "register": sec_register, "mint": sec_mint, "refre
             "services": sec_services, "nodes": sec_nodes, "alerts": sec_alerts}
 
 
-def render(s, name, days):
-    print(f"\n── {name} ─{'─' * (30 - len(name))}")
+def section_lines(s, name, days):
+    """板块 → 文本行列表(人类可读;同时供 CLI 打印与 Telegram 机器人复用)"""
+    lines = [f"── {name} ─" + "─" * max(0, 30 - len(name))]
     if name == "pool":
         if s.get("error"):
-            print("  ", s["error"]); return
+            lines.append("  " + s["error"]); return lines
         st = s["status"]
-        print(f"  Build {st['build_active']} (水位 {st['build_water_level']}) | "
-              f"Web {st['web_active']} (水位 {st['web_water_level']}) → {s['verdict']}")
+        lines.append(f"  Build {st['build_active']} (水位 {st['build_water_level']}) | "
+                     f"Web {st['web_active']} (水位 {st['web_water_level']}) → {s['verdict']}")
         for prov, dist in st["by_status"].items():
-            print(f"    {prov}: " + " ".join(f"{k}={v}" for k, v in sorted(dist.items())))
+            lines.append(f"    {prov}: " + " ".join(f"{k}={v}" for k, v in sorted(dist.items())))
         if s["nodes"]:
-            print("    节点分配: " + ", ".join(f"#{n['egress_node_id']}={n['accounts']}" for n in s["nodes"]))
+            lines.append("    节点分配: " + ", ".join(f"#{n['egress_node_id']}={n['accounts']}" for n in s["nodes"]))
     elif name == "register":
-        print(f"  累计 SSO: {s['sso_total']} | 近 {s['window']}d 日志: 成功 {s['ok']} / 失败 {s['fail']}"
-              + (f" (成功率 {s['success_rate']}%)" if s["success_rate"] is not None else ""))
+        lines.append(f"  累计 SSO: {s['sso_total']} | 近 {s['window']}d 日志: 成功 {s['ok']} / 失败 {s['fail']}"
+                     + (f" (成功率 {s['success_rate']}%)" if s["success_rate"] is not None else ""))
         for lg in s["logs"]:
-            print(f"    {lg['day']} {lg['file']}: ok={lg['ok']} fail={lg['fail']}")
+            lines.append(f"    {lg['day']} {lg['file']}: ok={lg['ok']} fail={lg['fail']}")
     elif name == "mint":
-        print(f"  auths/ 共 {s['total']} | 近 {s['window_days']}d 新增 {s['new_in_window']} | "
-              f"过期 {s['stale']}" + (f" | 独立用户 {s['unique_subs']}" if s["unique_subs"] else ""))
+        lines.append(f"  auths/ 共 {s['total']} | 近 {s['window_days']}d 新增 {s['new_in_window']} | "
+                     f"过期 {s['stale']}" + (f" | 独立用户 {s['unique_subs']}" if s["unique_subs"] else ""))
     elif name == "refresh":
         if s.get("error"):
-            print("  ", s["error"]); return
-        print(f"  凭据 {s['total']}: fresh {s['fresh']} / 过期 {s['expired']}"
-              + (f" / 无过期时间(SSO类) {s['no_expiry']}" if s.get("no_expiry") else "")
-              + f" | 刷新失败中 {s['failing']} | 永久失效 {s['permanent']}")
+            lines.append("  " + s["error"]); return lines
+        lines.append(f"  凭据 {s['total']}: fresh {s['fresh']} / 过期 {s['expired']}"
+                     + (f" / 无过期时间(SSO类) {s['no_expiry']}" if s.get("no_expiry") else "")
+                     + f" | 刷新失败中 {s['failing']} | 永久失效 {s['permanent']}")
         if s["last_errors"]:
-            print("    最近错误: " + ", ".join(f"{c}×{n}" for c, n in s["last_errors"]))
+            lines.append("    最近错误: " + ", ".join(f"{c}×{n}" for c, n in s["last_errors"]))
     elif name == "reauth":
         pend = s["pending"]
-        print(f"  待重授权: {pend if pend is not None else 'N/A'} | 守护服务: {s['service']}")
+        lines.append(f"  待重授权: {pend if pend is not None else 'N/A'} | 守护服务: {s['service']}")
         if pend:
-            print("    → reauth_batch --daemon 会自动处理;等不及可手动: python reauth_batch.py")
+            lines.append("    → reauth_batch --daemon 会自动处理;等不及可手动: python reauth_batch.py")
     elif name == "api":
         if s.get("error"):
-            print("  ", s["error"]); return
-        print(f"  近 {s['window_days']}d 请求 {s['total']}: 成功 {s['ok']} / 失败 {s['fail']}"
-              + (f" (成功率 {s['success_rate']}%)" if s["success_rate"] is not None else ""))
+            lines.append("  " + s["error"]); return lines
+        lines.append(f"  近 {s['window_days']}d 请求 {s['total']}: 成功 {s['ok']} / 失败 {s['fail']}"
+                     + (f" (成功率 {s['success_rate']}%)" if s["success_rate"] is not None else ""))
         if s["status_codes"]:
-            print("    状态码: " + ", ".join(f"{c}={n}" for c, n in s["status_codes"]))
+            lines.append("    状态码: " + ", ".join(f"{c}={n}" for c, n in s["status_codes"]))
         if s["top_models"]:
-            print("    模型: " + ", ".join(f"{m}×{n}" for m, n in s["top_models"]))
+            lines.append("    模型: " + ", ".join(f"{m}×{n}" for m, n in s["top_models"]))
         if s["avg_duration_ms"]:
-            print(f"    平均耗时: {s['avg_duration_ms']}ms")
+            lines.append(f"    平均耗时: {s['avg_duration_ms']}ms")
     elif name == "balance":
         if s.get("error"):
-            print("  ", s["error"]); return
-        print(f"  LuckMail {s['luckmail']} | YesCaptcha {s['yescaptcha']} | 最近判定: {s['verdict']}")
+            lines.append("  " + s["error"]); return lines
+        lines.append(f"  LuckMail {s['luckmail']} | YesCaptcha {s['yescaptcha']} | 最近判定: {s['verdict']}")
     elif name == "services":
         for u, st in s.items():
             mark = {"active": "●", "inactive": "○", "failed": "✗"}.get(st, "?")
-            print(f"  {mark} {u}: {st}")
+            lines.append(f"  {mark} {u}: {st}")
     elif name == "nodes":
         if s.get("error"):
-            print("  ", s["error"]); return
+            lines.append("  " + s["error"]); return lines
         for n in s["nodes"]:
             state = "enabled" if n["enabled"] else "disabled"
             flags = []
@@ -401,13 +402,25 @@ def render(s, name, days):
                 flags.append("无代理!")
             if n["cooldown_until"]:
                 flags.append(f"冷却至{n['cooldown_until'][:16]}")
-            print(f"  #{n['id']} {_short(n['name'])} [{state}]{'(' + ','.join(flags) + ')' if flags else ''} "
-                  f"health={n['health']} probe={n['probe_status']} ip={n['exit_ip']}")
+            lines.append(f"  #{n['id']} {_short(n['name'])} [{state}]{'(' + ','.join(flags) + ')' if flags else ''} "
+                         f"health={n['health']} probe={n['probe_status']} ip={n['exit_ip']}")
             if n["last_error"]:
-                print(f"      last_error={_short(n['last_error'], 60)}")
+                lines.append(f"      last_error={_short(n['last_error'], 60)}")
     elif name == "alerts":
-        print(f"  Telegram: {'✓' if s['telegram'] else '✗ 未配置'} | SMTP: {'✓' if s['smtp'] else '✗ 未配置'}"
-              + (f" | 收件人: {s['alert_email']}" if s["alert_email"] else ""))
+        lines.append(f"  Telegram: {'✓' if s['telegram'] else '✗ 未配置'} | SMTP: {'✓' if s['smtp'] else '✗ 未配置'}"
+                     + (f" | 收件人: {s['alert_email']}" if s["alert_email"] else ""))
+    return lines
+
+
+def full_text(section="all", days=1):
+    """完整/单板块报告文本(CLI 与 Telegram 机器人共用)"""
+    parts = [f"grok-register 状态总览  {NOW.strftime('%Y-%m-%d %H:%M %Z')}   (GROK2API_DB={DB_PATH})"]
+    for name, fn in SECTIONS.items():
+        if section != "all" and name != section:
+            continue
+        s = fn(days) if name in ("register", "mint", "api") else fn()
+        parts.extend(section_lines(s, name, days))
+    return "\n".join(parts)
 
 
 def main():
@@ -426,12 +439,7 @@ def main():
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
         return
 
-    print(f"grok-register 状态总览  {NOW.strftime('%Y-%m-%d %H:%M %Z')}   (GROK2API_DB={DB_PATH})")
-    for name, fn in SECTIONS.items():
-        if args.section != "all" and name != args.section:
-            continue
-        s = fn(args.days) if name in ("register", "mint", "api") else fn()
-        render(s, name, args.days)
+    print(full_text(args.section, args.days))
 
 
 if __name__ == "__main__":

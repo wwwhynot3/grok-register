@@ -101,6 +101,7 @@ grok-register/
 ├── auto_replenish.py     # 补位守护 + 池管理(双水位/轮换IP/止损/推送)
 ├── balance_monitor.py    # 余额监控(阈值停补水 + 告警 + 日志分析)
 ├── status.py             # 状态总览(池水位/注册/铸造/刷新/API 成功率/服务,支持 --json)
+├── tg_bot.py             # Telegram 查询机器人(发命令/关键词即回状态)
 ├── reauth_batch.py       # 批量重铸:grok2api 中 reauthRequired 账号自动重授权(推荐)
 ├── remint_oauth.py       # 一次性重铸(手选少量账号;按需改顶部 NEED 数组)
 ├── clash_rotator.py      # 代理节点轮换(LRU)
@@ -268,6 +269,30 @@ uv run python status.py --json       # 机器可读 JSON(给脚本/AI)
   ● vps-grok-replenish: active
 ```
 
+### Telegram 查询机器人 — `tg_bot.py`
+
+配置 `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` 后常驻,在 TG 里发命令/关键词即回状态(仅本人可查,复用 status.py 数据):
+
+```
+/status 或 状态 全部    → 完整状态总览
+/pool 或 水位           → 池水位 vs 阈值
+/register 或 注册       → 注册历史与成功率
+/mint 或 铸造           → 铸造历史
+/refresh 或 刷新        → 凭据刷新状态
+/reauth 或 重授权       → 待重授权与守护
+/api 或 调用            → API 成功率
+/balance 或 余额        → 余额
+/nodes 或 节点          → 出口节点健康
+/services 或 服务       → systemd 状态
+/help 或 帮助           → 命令列表
+```
+
+```bash
+uv run python tg_bot.py     # 常驻;或 systemd: deploy/vps-grok-tg-bot.service
+```
+
+与 alert.py 推送共存无冲突(一个长轮询收命令,一个 sendMessage 发告警)。
+
 ### 注册
 
 ```bash
@@ -340,6 +365,7 @@ uv run python reauth_batch.py --daemon 600   # 常驻:每 600s 扫描并自动�
 | `vps-grok2api.service` | API 网关(账号池服务端,接管刷新/推理) | [grok2api](https://github.com/chenyme/grok2api) |
 | `vps-grok-replenish.service` | 补位守护(`xvfb-run` 有头浏览器;双水位) | 本项目 |
 | `vps-grok-reauth.service` | **自动重授权守护**:RT 被撤销时自动用 SSO 重铸推回网关 | 本项目 |
+| `vps-grok-tg-bot.service` | **Telegram 查询机器人**:发命令即回状态(复用 status.py) | 本项目 |
 | `vps-egress-quality-guard.service` | 出口质量守卫 sidecar(探针+降智隔离) | [egress-enhancements](https://github.com/lij768423-svg/grok2api-egress-enhancements) |
 | `vps-balance-monitor.service` / `.timer` | 每小时余额检查 + 告警 | 本项目 |
 | `vps-resume-replenish.service` / `.timer` | 抑制窗口后自动恢复补位(默认次日 04:30,对齐 x.ai 24h 配额窗口) | 本项目 |

@@ -1,0 +1,24 @@
+# Telegram 查询机器人——发命令/关键词(如 /status、水位)即回 grok-register 状态。
+#
+# 注册说明:
+#   1. 需 .env 已配置 TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID(与告警共用同一 bot 即可)
+#   2. 与 alert.py 推送共存无冲突:本服务只 getUpdates 长轮询,alert 只 sendMessage
+#   3. 仅 TELEGRAM_CHAT_ID 本人可查询,他人消息静默忽略
+#   4. 数据复用 status.py,全部只读
+#
+# 依赖:网络。
+[Unit]
+Description=Grok Register Telegram Query Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/grok-register
+EnvironmentFile=/opt/grok-register/.env
+ExecStart=/opt/grok-register/.venv/bin/python tg_bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

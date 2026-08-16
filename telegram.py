@@ -45,7 +45,7 @@ KB = [
 
 HELP = """<b>grok-register 状态查询</b>
 
-发命令/关键词,或直接点下方按钮:
+输入框打 <code>/</code> 会弹出全部命令菜单;或直接发下方关键词/点按钮:
 
 /status 或 状态 全部    → 完整状态总览
 /pool 或 水位           → 池水位 vs 阈值
@@ -75,6 +75,34 @@ CMD_MAP = {
     "alerts": "alerts", "告警": "alerts",
     "help": "help", "start": "help", "?": "help", "帮助": "help",
 }
+
+# Telegram 原生命令菜单(输入 / 时弹出的提示):command 仅限小写字母/数字/下划线
+BOT_COMMANDS = [
+    {"command": "status", "description": "完整状态总览"},
+    {"command": "pool", "description": "池水位 vs 阈值"},
+    {"command": "register", "description": "注册历史与成功率"},
+    {"command": "mint", "description": "铸造历史"},
+    {"command": "refresh", "description": "凭据刷新状态"},
+    {"command": "reauth", "description": "待重授权与守护"},
+    {"command": "api", "description": "API 请求成功率"},
+    {"command": "balance", "description": "LuckMail/YesCaptcha 余额"},
+    {"command": "nodes", "description": "出口节点健康"},
+    {"command": "services", "description": "systemd 服务状态"},
+    {"command": "alerts", "description": "告警通道配置"},
+    {"command": "help", "description": "命令与按钮说明"},
+]
+
+
+def set_my_commands(token):
+    """注册命令菜单:用户在输入框打 / 即可看到全部命令与说明。幂等,启动时调用一次。"""
+    try:
+        tg_api(token, "setMyCommands",
+               {"commands": json.dumps(BOT_COMMANDS)})
+        print("[TG-BOT] 命令菜单已注册(setMyCommands)", flush=True)
+        return True
+    except Exception as e:
+        print(f"[TG-BOT] 命令菜单注册失败: {e}", flush=True)
+        return False
 
 
 def tg_api(token, method, params=None, timeout=90):
@@ -210,6 +238,7 @@ def run_query_bot():
     if not token or not owner:
         print("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 未配置,机器人无法启动", flush=True)
         return 1
+    set_my_commands(token)
     print(f"[TG-BOT] 启动,长轮询中(仅响应 chat_id={owner})", flush=True)
     offset = None
     while True:

@@ -101,7 +101,8 @@ grok-register/
 ├── auto_replenish.py     # 补位守护 + 池管理(双水位/轮换IP/止损/推送)
 ├── balance_monitor.py    # 余额监控(阈值停补水 + 告警 + 日志分析)
 ├── status.py             # 状态总览(池水位/注册/铸造/刷新/API 成功率/服务,支持 --json)
-├── tg_bot.py             # Telegram 查询机器人(发命令/关键词即回状态)
+├── telegram.py           # Telegram 统一模块(回复键盘/命令菜单/HTML 渲染/发送链路)
+├── tg_bot.py             # Telegram 查询机器人入口(薄壳,deploy 服务指向它)
 ├── reauth_batch.py       # 批量重铸:grok2api 中 reauthRequired 账号自动重授权(推荐)
 ├── remint_oauth.py       # 一次性重铸(手选少量账号;按需改顶部 NEED 数组)
 ├── clash_rotator.py      # 代理节点轮换(LRU)
@@ -232,7 +233,7 @@ uv run python auto_replenish.py --daemon 600    # 每 600s 检查一次
 | `GROK2API_DB` | grok2api 的 SQLite 绝对路径。**Linux 必设**,否则 Web 池计数恒 0 → 无限补位 | grok2api 数据目录 |
 | `GROK_MIN_ACCOUNTS` / `GROK_MIN_FREE_ACCOUNTS` / `GROK_MIN_WEB_ACCOUNTS` | 三池水位 | 按你的目标池大小 |
 | `CLASH_HOST` / `CLASH_PORT` / `CLASH_SECRET` / `CLASH_GROUP` | IP 轮换(可选;无控制器自动禁用) | 你的代理外部控制器 |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | 告警+查询 | @BotFather 建 bot;驱动推送告警(alert.py)与查询机器人(tg_bot.py),见[Telegram 集成](#telegram-集成两个接口一对配置) |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | 告警+查询 | @BotFather 建 bot;驱动推送告警(alert.py)与查询机器人(tg_bot.py),见[Telegram 集成](#telegram-集成统一模块-telegrampy一对配置) |
 | `GROK_SKIP_NODES` | 实测不可用节点黑名单(精确名,逗号分隔) | 浏览器真实探测失败的节点 |
 
 ---
@@ -276,11 +277,11 @@ uv run python status.py --json       # 机器可读 JSON(给脚本/AI)
 | | 推送告警 `alert.py` | 查询机器人 `tg_bot.py` |
 |---|---|---|
 | 方向 | 主动推送(单向) | 你发命令/点按钮 → 回复(双向) |
-| 触发 | 事件驱动:余额低于阈值、补位熔断、重授权完成/失败 | 你发 `/status` 等命令、中文关键词,或点内联按钮 |
+| 触发 | 事件驱动:余额低于阈值、补位熔断、重授权完成/失败 | 你发 `/status` 等命令、中文关键词,或点输入框上方的回复键盘按钮 |
 | 数据 | 只读 + 写 `.alert_state.json`(冷却去重状态) | 纯只读(复用 status.py) |
 | 部署 | 随调用方运行(balance_monitor / reauth daemon / auto_replenish) | systemd 常驻(`deploy/vps-grok-tg-bot.service`) |
 
-**消息渲染**:HTML parse mode——板块标题加粗(`<b>▍状态</b>`)、长行在 `|` 处自动折行(窄窗口友好)、服务状态用 emoji(`🟢`/`⚪`/`🔴`)、查询回复附带内联按钮(点一下即查,免敲命令)。
+**消息渲染**:HTML parse mode——板块标题加粗(`<b>▍状态</b>`)、长行在 `|` 处自动折行(窄窗口友好)、服务状态用 emoji(`🟢`/`⚪`/`🔴`)、查询回复附带回复键盘按钮(点击即发送命令,免敲字)。
 
 **为什么共存无冲突**:alert.py 只发消息,tg_bot.py 只收消息(长轮询消费 update offset)——同一 bot token 上两条独立链路,互不干扰。
 

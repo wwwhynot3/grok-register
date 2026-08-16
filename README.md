@@ -60,6 +60,22 @@ flowchart LR
 
 一句话:**注册得 SSO → 铸造得 OAuth Token → 推进 grok2api → 池子低了再注册**。注册/铸造走浏览器(有头),Token 刷新走 API(单归属 grok2api)。
 
+### 职责划分 / Responsibility split
+
+| 环节 | 归属 | 说明 |
+|---|---|---|
+| 注册 / 铸造 / 推送 | **grok-register** | 浏览器完成:SSO → OAuth Token → 喂池 |
+| 水位判定 + 补位 | **grok-register** | 池低于水位自动注册/铸造/推送(`auto_replenish --daemon`) |
+| IP 轮换 | **grok-register** | 注册/铸造前切换干净出口(`clash_rotator`) |
+| 余额监控 / 告警 | **grok-register** | 阈值停补水 + Telegram/SMTP(`balance_monitor`) |
+| RT 撤销重授权 | **grok-register** | SSO → Device Flow 重铸 → 推回(`reauth_batch --daemon`,自动) |
+| AT 刷新 + RT 轮换 | **grok2api** | 自治调度,**执行权唯一归属**——本地双刷会互相作废 RT(见 [Token 保鲜](#token-保鲜--重授权重要)) |
+| 推理 / 对话 API | **grok2api** | 账号池服务端 |
+| 配额同步 / 账号状态 | **grok2api** | 标记 disabled / reauthRequired |
+| 质量守卫 | **grok2api**(+sidecar) | 节点健康 + 降智隔离(见[推荐配套](#推荐配套--recommended-companions)) |
+
+> 关键边界:刷新是"触发权在 grok-register(`--refresh-only` 只是调 grok2api 的刷新 API)、**执行权唯一在 grok2api**"。grok-register 是"造号端",grok2api 是"服务端",两者通过管理 API + SQLite 协作。
+
 ---
 
 ## 特性 / Features

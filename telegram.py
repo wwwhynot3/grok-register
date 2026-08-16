@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Telegram 统一模块:查询机器人(命令/内联按钮)+ 发送通道(推送/回复共用)。
+"""Telegram 统一模块:查询机器人(命令/回复键盘)+ 发送通道(推送/回复共用)。
 
 职责:
-  - run_query_bot()   常驻长轮询:命令/关键词 + 内联按钮 → 回复状态(仅本人可查)
+  - run_query_bot()   常驻长轮询:命令/关键词 + 回复键盘 → 回复状态(仅本人可查)
   - send_message()    统一发送(HTML/纯文本,按行分块,防 Telegram 4096 上限)
   - render_html()     把 status.py 的 CLI 文本渲染成紧凑 HTML(窄窗口友好)
 
@@ -28,7 +28,7 @@ API = "https://api.telegram.org/bot{token}/{method}"
 POLL_TIMEOUT = 50
 MAX_CHUNK = 3500  # 单条消息上限 4096,留余量(HTML 转义后可能变长)
 
-# ── 内联按钮(点一下即查,免敲命令) ──
+# ── 回复键盘(点击即发送命令,免敲字) ──
 
 HELP = """<b>grok-register 状态查询</b>
 

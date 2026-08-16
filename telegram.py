@@ -76,6 +76,14 @@ CMD_MAP = {
     "help": "help", "start": "help", "?": "help", "帮助": "help",
 }
 
+# 每条回复底部的命令提示脚注(让 / 命令在消息里可见,不只有按钮)
+CMD_FOOTER = (
+    "\n\n—\n<b>命令</b>: <code>/status</code> <code>/pool</code> <code>/refresh</code> "
+    "<code>/register</code> <code>/mint</code> <code>/api</code> <code>/balance</code> "
+    "<code>/nodes</code> <code>/services</code> <code>/reauth</code> <code>/alerts</code>\n"
+    "输入框打 <code>/</code> 可弹出全部说明;也可点下方按钮"
+)
+
 # Telegram 原生命令菜单(输入 / 时弹出的提示):command 仅限小写字母/数字/下划线
 BOT_COMMANDS = [
     {"command": "status", "description": "完整状态总览"},
@@ -202,7 +210,7 @@ def process_update(up, token, owner):
         reply = HELP if data == "help" else None
         if reply is None:
             try:
-                reply = make_reply(data)
+                reply = make_reply(data) + CMD_FOOTER
             except Exception as e:
                 reply = f"查询失败: {e}"
         # 回复后保留按钮,方便连续点查
@@ -223,7 +231,7 @@ def process_update(up, token, owner):
     reply = HELP if section == "help" else None
     if reply is None:
         try:
-            reply = make_reply(section)
+            reply = make_reply(section) + CMD_FOOTER
         except Exception as e:
             reply = f"查询失败: {e}"
     send_message(reply, parse_mode="HTML", chat_id=cid, token=token,

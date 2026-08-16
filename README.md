@@ -87,7 +87,8 @@ flowchart LR
 - **IP 轮换** (`clash_rotator.py`) — 注册前切换代理节点(LRU 避用近期节点),`GROK_SKIP_NODES` 黑名单
 - **Token 重铸** (`reauth_batch.py` / `remint_oauth.py`) — RT 被 x.ai 撤销后,用 SSO 重新铸造并推回网关
 - **余额监控** (`balance_monitor.py`) — LuckMail/YesCaptcha 余额低于阈值 → 停补水 + 邮件/Telegram 告警 + 日志健康分析
-- **多邮箱商** — GPTMail / mail.tm / LuckMail(买断/接码)/ MailNest / Gmail,API 统一,可逗号组成回退链
+- **多邮箱商** — GPTMail / mail.tm / LuckMail(买断/接码)/ MailNest / Gmail,API 统一,可逗号组成回退链。
+  ⚠️ **实测状态:仅 LuckMail 买断 ms_imap 全链路跑通**(注册/收码/铸造);其余提供商代码完整但**未经生产验证**——gmail 变体/self_built 已被 x.ai 拒绝,接码订单模式平台匹配层有坑。换提供商前先在测试环境验链路。
 
 ---
 
@@ -115,7 +116,8 @@ grok-register/
 │   ├── accounts.txt      #   email:password:sso(每行一个)
 │   └── grok.txt          #   纯 SSO 列表
 ├── auths/                # 铸造输出(运行时生成,已 gitignore):每账号一个 xai-<email>.json
-├── deploy/               # systemd 服务模板(本机用户级 + VPS 级)
+├── docs/                 # 设计文档
+│   └── registration-risk.md # 与 x.ai 风控的对抗分析(检测面/历史收紧/应对)
 ├── .env.example          # 全部配置模板(复制为 .env)
 └── pyproject.toml        # 依赖与项目元数据
 ```
@@ -230,7 +232,7 @@ uv run python auto_replenish.py --daemon 600    # 每 600s 检查一次
 | 变量 | 作用 | 获取/设置 |
 |---|---|---|
 | `YESCAPTCHA_KEY` | 注册解 Turnstile(必填) | yescaptcha.com 控制台 |
-| `EMAIL_PROVIDER` | 邮箱商:luckmail / mailnest / gptmail / mailtm / gmail,可逗号回退 | 按你有的服务 |
+| `EMAIL_PROVIDER` | 邮箱商:luckmail / mailnest / gptmail / mailtm / gmail,可逗号回退。**⚠️ 仅 luckmail(ms_imap)实测可用**,其余代码完整但未生产验证 | 按你有的服务 |
 | `LUCKMAIL_API_KEY` / `MAILNEST_API_KEY` | 对应邮箱商密钥 | 对应服务控制台 |
 | `GROK_PROXY` | 注册/铸造出口代理(must 指向可用节点) | 你的 Clash/mihomo 混合端口 |
 | `GROK2API_BASE` / `GROK2API_USER` / `GROK2API_PASS` | 网关推送/补位 | grok2api 部署 |
@@ -489,6 +491,7 @@ systemctl enable --now vps-mihomo vps-grok2api vps-grok-replenish vps-grok-reaut
 
 **Q: 注册流程会不会被封?模仿真实流程还不够稳吗?**
 模仿的是流程,但判定权在 x.ai 手里——他们不需要证明你是机器人,只需要让某一环**悄悄不产出**(接口照常 200 但邮件不发、单日发码配额硬顶、按 IP 段/UA 集群降权)。本仓库已实历五轮收紧:gRPC 发码被静默封杀、PKCE 路径被 CF 拦截(已删)、gmail 变体/self_built 域名被拉黑、TLS 指纹过时 403、每日发码配额 ~20-25 个。应对靠**多路径 + 快速适配**:引擎可换(grok_free 主通道/grok.py 备用)、邮箱商可换(ms_imap 买断当前可用)、指纹可换(`GROK_IMPERSONATE`)、节点可换(轮换组)。哪天 `grok_free.py` 产出为零,按[故障排查](#故障排查--troubleshooting)逐项换路,别在死路上重试烧钱。
+完整对抗分析(检测面/历史收紧编年/应对优先级)见 [docs/registration-risk.md](docs/registration-risk.md),想深挖的自己看。
 
 **Q: 免费号能调哪些模型?**
 注册即得基础档。经 grok2api:SSO 直接进 Web 池(`grok-chat-fast` / `grok-imagine-image`);铸造后进 Build 池(`grok-4.6` 等,有速率限制)。付费模型需 SuperGrok/Heavy 订阅账号。

@@ -100,6 +100,7 @@ grok-register/
 ├── device_mint.py        # SSO → OAuth Token 铸造(核心)
 ├── auto_replenish.py     # 补位守护 + 池管理(双水位/轮换IP/止损/推送)
 ├── balance_monitor.py    # 余额监控(阈值停补水 + 告警 + 日志分析)
+├── status.py             # 状态总览(池水位/注册/铸造/刷新/API 成功率/服务,支持 --json)
 ├── reauth_batch.py       # 批量重铸:grok2api 中 reauthRequired 账号自动重授权(推荐)
 ├── remint_oauth.py       # 一次性重铸(手选少量账号;按需改顶部 NEED 数组)
 ├── clash_rotator.py      # 代理节点轮换(LRU)
@@ -236,6 +237,36 @@ uv run python auto_replenish.py --daemon 600    # 每 600s 检查一次
 ---
 
 ## 常用命令 / Usage
+
+### 状态总览 — `status.py`
+
+一屏看全系统状态(全部只读,不改任何数据):
+
+```bash
+uv run python status.py              # 完整报告
+uv run python status.py --section pool   # 只看某个板块
+uv run python status.py --days 7     # API 审计按 7 天窗口
+uv run python status.py --json       # 机器可读 JSON(给脚本/AI)
+```
+
+板块:`pool`(池水位 vs 阈值 + 判定)、`register`(累计 SSO + 近 N 天注册成功/失败率)、
+`mint`(auths/ 数量 + 新增 + 独立用户数)、`refresh`(fresh/过期/刷新失败/永久失效)、
+`reauth`(待重授权数 + 守护服务状态)、`api`(近 N 天请求成功率/状态码/模型分布)、
+`balance`(LuckMail/YesCaptcha 余额 + 最近判定)、`services`(systemd 单元状态)、
+`nodes`(egress 节点健康/探针/出口 IP)、`alerts`(Telegram/SMTP 配置状态)。
+
+示例输出:
+
+```
+── pool ───────────────────────────
+  Build 108 (水位 100) | Web 109 (水位 30) → 充足,补位守护休眠
+── api ────────────────────────────
+  近 1d 请求 61: 成功 55 / 失败 6 (成功率 90.2%)
+    状态码: 200=55, 502=6
+── services ───────────────────────
+  ● vps-mihomo: active
+  ● vps-grok-replenish: active
+```
 
 ### 注册
 

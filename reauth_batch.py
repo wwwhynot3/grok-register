@@ -20,7 +20,11 @@ from auto_replenish import push_to_grok2api
 from patchright.async_api import async_playwright
 
 DB = os.getenv("GROK2API_DB") or os.path.join(_BASE, "data", "backend.db")  # 未设 GROK2API_DB 时用本地路径(会明显报错而非连错库)
-MAX_ACCOUNTS = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
+if "--daemon" in sys.argv:
+    MAX_ACCOUNTS = 1000  # daemon 模式每轮上限在 run_daemon 内固定为 5
+else:
+    _pos = [a for a in sys.argv[1:] if a.isdigit()]
+    MAX_ACCOUNTS = int(_pos[0]) if _pos else 1000
 SLEEP_BETWEEN = 5
 
 def get_reauth_emails(limit=None):

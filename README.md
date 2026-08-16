@@ -270,37 +270,45 @@ uv run python auto_replenish.py --min 4              # 临时覆盖水位阈值
 x.ai 批量吊销 RT 时(刷新报 `invalid_grant`,grok2api 账号变 `reauthRequired`):
 
 ```bash
-uv run python reauth_batch.py          # 全量重铸(自动读取 reauthRequired 账号,可断点续跑)
+uv run python reauth_batch.py          # 一次性全量重铸(自动读取 reauthRequired 账号,可断点续跑)
 uv run python reauth_batch.py 10       # 只处理前 10 个(试跑/分批)
+uv run python reauth_batch.py --daemon 600   # 常驻:每 600s 扫描并自动重授权(无需人工)
 ```
 
 - 链路:SSO(存于 `keys/accounts.txt` 未丢)→ Device Flow 自动授权 → 推回网关,约 45s/号
-- 重铸前先停补位 daemon 防并发(见[实战要点](#实战要点踩坑记录) #9)
-- 少量手选账号用 `remint_oauth.py`(编辑顶部 `NEED` 数组)
+- **自动化**:`--daemon` 模式常驻扫描,发现 reauthRequired 自动处理。与补位守护错峰——Build 池低于免费水位且补位在跑时自动让位;单实例文件锁防重入;空闲零成本(无待处理时只查 DB)
+- systemd:`deploy/vps-grok-reauth.service`(vps-grok-replenish 同款环境)
+- 一次性小批量手动场景用 `remint_oauth.py`(编辑顶部 `NEED` 数组)
 
 ---
 
 ## VPS 部署(systemd)
 
-`deploy/` 提供模板:
+`deploy/` 提供模板(全部带"注册说明"注释,按实际路径改 `/opt/grok-register` 等):
 
-| 文件 | 用途 |
-|---|---|
-| `grok-replenish.service` | 本机用户级补位守护(`systemctl --user`,`%h` 路径无关) |
-| `vps-grok-replenish.service` | VPS 补位守护(`xvfb-run` 有头浏览器;按实际路径改 `/opt/grok-register`) |
-| `vps-balance-monitor.service` / `.timer` | 每小时余额检查 + 告警 |
-| `vps-resume-replenish.service` / `.timer` | 抑制窗口后自动恢复补位(默认次日 04:30,对齐 x.ai 24h 配额窗口) |
+| 文件 | 用途 | 来源 |
+|---|---|---|
+| `vps-mihomo.service` | 出口代理(Clash 内核),注册/API 流量的干净出口 | 通用 |
+| `vps-grok2api.service` | API 网关(账号池服务端,接管刷新/推理) | [grok2api](https://github.com/chenyme/grok2api) |
+| `vps-grok-replenish.service` | 补位守护(`xvfb-run` 有头浏览器;双水位) | 本项目 |
+| `vps-grok-reauth.service` | **自动重授权守护**:RT 被撤销时自动用 SSO 重铸推回网关 | 本项目 |
+| `vps-egress-quality-guard.service` | 出口质量守卫 sidecar(探针+降智隔离) | [egress-enhancements](https://github.com/lij768423-svg/grok2api-egress-enhancements) |
+| `vps-balance-monitor.service` / `.timer` | 每小时余额检查 + 告警 | 本项目 |
+| `vps-resume-replenish.service` / `.timer` | 抑制窗口后自动恢复补位(默认次日 04:30,对齐 x.ai 24h 配额窗口) | 本项目 |
+| `grok-replenish.service` | 本机用户级补位守护(`systemctl --user`,`%h` 路径无关) | 本项目 |
 
 ```bash
 cp deploy/vps-*.service deploy/vps-*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now vps-grok-replenish vps-balance-monitor.timer
+# 按需启用;依赖链建议:mihomo → grok2api → replenish/reauth → balance-monitor.timer
+systemctl enable --now vps-mihomo vps-grok2api vps-grok-replenish vps-grok-reauth vps-balance-monitor.timer
 ```
 
 要点:
 - 注册与铸造都会拉起**有头 Chromium**:VPS 无显示器时必须用 `xvfb-run -a` 包装(CF 拒绝 headless,即使 IP 干净)
 - 守护进程从 `EnvironmentFile=.env` 读配置;池满自动休眠,零消耗
-- 依赖项(如 mihomo、grok2api)按你的实际部署调整 `After=`/`Wants=`
+- grok2api 与质量守卫来自各自项目(见[推荐配套](#推荐配套--recommended-companions)),本仓库只提供部署模板
+- grok2api 的 SQLite 按相对路径创建,其 `WorkingDirectory` 必须指向部署目录且保留
 - 本仓库只负责造号;网关侧(egress 代理、质量守卫)见[推荐配套](#推荐配套--recommended-companions)
 
 ---
@@ -314,7 +322,7 @@ systemctl enable --now vps-grok-replenish vps-balance-monitor.timer
 5. **节点别用"移动直连"类。** 移动优化线路在数据中心 VPS 上不稳(授权页加载失败,表现 TITLE 空)。订阅更新后出现不稳节点,同样处理。
 6. **系统 Chrome 必装(VPS)。** 铸造的浏览器启动链是 系统 Chrome → 完整 Chromium → headless shell;无系统 Chrome 时降级 headless,CF 指纹识别率骤升(授权页 TITLE 空/重定向登录页)。Debian 系安装:`wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt-get install -y ./google-chrome-stable_current_amd64.deb`
 7. **curl 探测节点会误判。** 多数节点对 curl 返回 CF JS 挑战页(`challenge-platform/jsd/main.js`,响应 13 万+ 字节),**真实 Chrome 执行 JS 后自动通过**——curl 判定不可靠。真正无解的是 **`Blocked due to abusive traffic patterns`**(IP 信誉硬拦截,浏览器也过不了)。判定节点好坏要用真实浏览器探测(见 `reauth_batch.py` 的 `browser_probe_good_nodes`)。
-8. **批量重铸勿与补位 daemon 并发**(小 VPS 上多个 xvfb Chrome 互相抢节点、重复铸造,还可能触发限流)。重铸前停 daemon,完成后恢复。
+8. **批量重铸勿与补位 daemon 并发**(小 VPS 上多个 xvfb Chrome 互相抢节点、重复铸造,还可能触发限流)。`reauth_batch --daemon` 已内置错峰(池低于水位且补位在跑时让位);**手动**跑 `reauth_batch.py` 前仍先停补位 daemon,完成后恢复。
 
 ---
 
@@ -359,6 +367,9 @@ curl -s http://127.0.0.1:8000/v1/chat/completions \
 
 **Q: 为什么必须浏览器授权?不能纯 API 铸造吗?**
 x.ai 的 Device Flow 需要浏览器(或能过 CF 的自动化)。纯 HTTP 铸造会被 CF 拦;本工具用 patchright 注入 SSO cookie 自动过授权页,全程无人值守。
+
+**Q: RT 被撤销必须手动重授权吗?能自动吗?**
+能自动。`reauth_batch.py --daemon [秒]` 常驻扫描 grok2api 中 `reauthRequired` 账号并自动用 SSO 重铸推回(部署模板 `deploy/vps-grok-reauth.service`)。与补位守护错峰:池低于水位且补位在跑时自动让位,避免两个浏览器流程互抢;空闲零成本。前置条件:SSO 仍存于 `keys/accounts.txt`(本工具注册后一直保存),系统 Chrome 已装。
 
 **Q: 为什么刷新必须单一归属 grok2api?**
 见[Token 保鲜](#token-保鲜--重授权重要):x.ai 刷新会轮换 RT,两套刷新器同时跑必然互相作废,整池过期。

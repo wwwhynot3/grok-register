@@ -1,0 +1,24 @@
+# 自动重授权守护——RT 被 x.ai 撤销时自动用 SSO 重铸并推回网关。
+#
+# 注册说明:
+#   1. 依赖 vps-grok-replenish.service 同款环境(浏览器 + .env)
+#   2. 与补位守护错峰:池低于水位且补位在跑时自动让位(脚本内判断)
+#   3. 空闲零成本:无 reauthRequired 账号时仅每 600s 查一次 DB
+#   4. 需 reauth_batch.py 依赖的 patchright + 系统 Chrome(见 README 实战要点 #6)
+#
+# 依赖:网络 + grok2api(其 DB 是待处理列表来源)。
+[Unit]
+Description=Grok Account Reauth Daemon (auto re-mint revoked RTs)
+After=network-online.target vps-grok2api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/grok-register
+EnvironmentFile=/opt/grok-register/.env
+ExecStart=/usr/bin/xvfb-run -a /opt/grok-register/.venv/bin/python reauth_batch.py --daemon 600
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -3,7 +3,9 @@ SSO → device flow 自动授权 → save_auth → push(force) → 校验 DB act
 
 - 可断点续跑: 已 active 的自动跳过
 - 节点策略: 候选好节点轮换; 失败时浏览器探测刷新好节点列表重试 1 次
-- 用法: python reauth_batch.py [最多处理N个]
+- 用法:
+    python reauth_batch.py [最多处理N个]        # 一次性批量
+    python reauth_batch.py --daemon [秒]        # 常驻自动重授权(与补位守护错峰)
 """
 import os, sys, time, asyncio, sqlite3
 _BASE = os.path.dirname(os.path.abspath(__file__))
@@ -78,8 +80,8 @@ async def browser_probe_good_nodes(candidates, want=4):
             await browser.close()
     return good
 
-def run():
-    emails = get_reauth_emails(MAX_ACCOUNTS)
+def run(limit=None):
+    emails = get_reauth_emails(limit or MAX_ACCOUNTS)
     print('待重授权:', len(emails))
     if not emails:
         print('无待处理账号')
@@ -144,5 +146,64 @@ def run():
             print('  ', e)
 
 
+def count_build_active():
+    """当前 Build 池可用数(与补位守护错峰判断用)"""
+    try:
+        conn = sqlite3.connect(DB)
+        row = conn.execute(
+            "SELECT COUNT(*) FROM provider_accounts WHERE provider='grok_build' AND auth_status='active'").fetchone()
+        conn.close()
+        return row[0] if row else 0
+    except sqlite3.Error:
+        return -1
+
+
+def run_daemon(interval=600):
+    """自动重授权守护:周期扫描 grok2api 中 reauthRequired 账号并自动重铸。
+
+    与补位守护错峰:当 Build 池低于免费水位且 replenish 守护进程活跃时,
+    replenish 可能正在用浏览器注册——本轮让位,等池子回满再处理。
+    单实例保护:文件锁,重复启动直接退出。
+    """
+    import fcntl
+    lock_path = os.path.join(_BASE, ".reauth.lock")
+    lock_f = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("[REAUTH-DAEMON] 另一个实例已运行(%s),退出" % lock_path, flush=True)
+        return
+    print("[REAUTH-DAEMON] 启动:每 %ds 扫描一次 reauthRequired 并自动重授权" % interval, flush=True)
+    while True:
+        try:
+            pending = get_reauth_emails(1)
+        except sqlite3.Error as e:
+            print("[REAUTH-DAEMON] DB 不可用(%s),本轮跳过" % e, flush=True)
+            time.sleep(interval)
+            continue
+        if pending:
+            pool = count_build_active()
+            threshold = int(os.getenv("GROK_MIN_FREE_ACCOUNTS") or 100)
+            replenish_alive = os.system("pgrep -f 'auto_replenish.py --daemon' >/dev/null 2>&1") == 0
+            if 0 <= pool < threshold and replenish_alive:
+                print("[REAUTH-DAEMON] 池 %d < 水位 %d 且补位守护活跃 → 让位,本轮跳过"
+                      % (pool, threshold), flush=True)
+            else:
+                try:
+                    run(limit=5)   # 每轮最多 5 个,防浏览器长时间独占
+                except Exception as e:
+                    print("[REAUTH-DAEMON] 本轮异常: %s" % e, flush=True)
+        else:
+            print("[REAUTH-DAEMON] 无 reauthRequired 账号", flush=True)
+        time.sleep(interval)
+
+
 if __name__ == "__main__":
-    run()
+    if "--daemon" in sys.argv:
+        try:
+            _interval = int(sys.argv[sys.argv.index("--daemon") + 1])
+        except (ValueError, IndexError):
+            _interval = 600
+        run_daemon(_interval)
+    else:
+        run()

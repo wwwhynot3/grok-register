@@ -1,0 +1,24 @@
+# grok2api 出口质量守卫(CPA sidecar)——节点健康探针 + 降智账号隔离。
+#
+# 注册说明:
+#   1. 从 https://github.com/lij768423-svg/grok2api-egress-enhancements 获取
+#      quality_guard.py 与其依赖,放入 grok2api 部署目录的 tools/ 下
+#   2. 与 vps-grok2api.service 配套:在 grok2api 侧开启 qualityGuard,
+#      并保证 GROK2API_QUALITY_GUARD_DIR 两处一致
+#   3. 路径按实际部署修改
+#
+# 依赖:网络 + vps-grok2api.service。
+[Unit]
+Description=Grok2API Egress Quality Guard (CPA sidecar)
+After=network-online.target vps-grok2api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/grok2api
+ExecStart=/usr/bin/python3 /opt/grok2api/tools/egress-quality-guard/quality_guard.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

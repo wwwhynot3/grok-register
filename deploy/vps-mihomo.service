@@ -1,0 +1,21 @@
+# 出口代理(mihomo/Clash 内核)——注册/铸造/API 流量的干净出口。
+#
+# 注册说明:
+#   1. 安装 mihomo 二进制到 /usr/local/bin/mihomo(或修改 ExecStart 路径)
+#   2. 准备 /etc/mihomo/config.yaml(订阅 + proxy-groups + 混合端口)
+#   3. grok-register 的 .env 里 GROK_PROXY 指向本服务的混合端口
+#
+# 依赖:网络。
+[Unit]
+Description=Mihomo Proxy (grok-register exit node)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/mihomo -d /etc/mihomo
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

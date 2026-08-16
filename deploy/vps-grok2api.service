@@ -1,0 +1,27 @@
+# API 网关(grok2api)——账号池服务端,接管 token 刷新/推理/配额。
+#
+# 注册说明:
+#   1. 从 https://github.com/chenyme/grok2api 构建二进制到 /usr/local/bin/grok2api
+#   2. WorkingDirectory / --config 指向你的 grok2api 部署目录
+#      (其 SQLite data/backend.db 按相对路径创建,路径必须保留)
+#   3. 可选:GROK2API_QUALITY_GUARD_DIR 指向质量守卫数据目录(启用 qualityGuard 时需要)
+#   4. grok-register 的 .env 里 GROK2API_BASE / GROK2API_USER / GROK2API_PASS /
+#      GROK2API_DB 指向本服务
+#
+# 依赖:网络。建议 After=vps-mihomo.service(出口经 mihomo)。
+[Unit]
+Description=Grok2API Account Pool API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/grok2api
+# 启用质量守卫时取消注释(目录需提前创建):
+# Environment=GROK2API_QUALITY_GUARD_DIR=/var/lib/grok2api-quality-guard
+ExecStart=/usr/local/bin/grok2api --config /opt/grok2api/config.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

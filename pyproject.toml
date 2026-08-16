@@ -1,0 +1,15 @@
+[project]
+name = "grok-register"
+version = "1.0.0"
+description = "Automated x.ai (Grok) account registration, OAuth token minting and pool auto-replenish toolkit"
+authors = [{ name = "grok-register contributors" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "beautifulsoup4",
+    "curl_cffi",
+    "python-dotenv",
+    "patchright",
+    "requests",
+    "drissionpage>=4.1.1.4",
+]

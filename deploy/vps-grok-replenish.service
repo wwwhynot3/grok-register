@@ -1,0 +1,17 @@
+[Unit]
+Description=Grok Account Replenish Daemon (VPS, xvfb headed browser)
+# 按实际部署路径修改下面的 /opt/grok-register；依赖项(mihomo/grok2api)可按需调整
+After=mihomo.service grok2api.service
+Wants=mihomo.service grok2api.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/grok-register
+EnvironmentFile=/opt/grok-register/.env
+# 阈值取 .env 的 GROK_MIN_ACCOUNTS（默认 2）
+ExecStart=/usr/bin/xvfb-run -a /opt/grok-register/.venv/bin/python auto_replenish.py --daemon 600
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+# VPS 余额监控服务 — 每小时跑一次 balance_monitor.py --once
+[Unit]
+Description=Grok balance monitor (LuckMail/YesCaptcha thresholds)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/grok-register
+ExecStart=/opt/grok-register/.venv/bin/python /opt/grok-register/balance_monitor.py --once
+Environment=PYTHONUNBUFFERED=1
+TimeoutStartSec=120

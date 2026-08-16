@@ -1,0 +1,7 @@
+# 触发:重启 vps-grok-replenish(抑制窗口结束后恢复补位)
+[Unit]
+Description=Resume grok replenish daemon
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl start vps-grok-replenish

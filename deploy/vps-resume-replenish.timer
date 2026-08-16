@@ -1,0 +1,11 @@
+# 一次性恢复定时器:抑制窗口结束后自动重启补位 daemon
+# 使用场景:x.ai 发码限流时补位守护进入长休眠,用本 timer 在窗口后恢复。
+[Unit]
+Description=Restart grok replenish after cooldown
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

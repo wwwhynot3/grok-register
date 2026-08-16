@@ -1,0 +1,22 @@
+# 桌面/本机部署模板 — 复制到 ~/.config/systemd/user/grok-replenish.service
+# 前提：项目 clone 到 $HOME/grok-register，且已 uv sync + 配置 .env
+#   .env 建议设置 GROK_PROXY 指向可用代理（VPS 直连会被 Cloudflare 拦截）
+# %h 在 user unit 中展开为 $HOME，路径无关
+# ⚠️ 本机有显示器/已手动管理时无需本服务;无桌面场景按需启用:
+#   systemctl --user enable --now grok-replenish && loginctl enable-linger "$USER"
+# 补位阈值取 .env 的 GROK_MIN_ACCOUNTS（默认 2），勿在 ExecStart 写死 --min
+[Unit]
+Description=Grok account auto-replenish daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/grok-register
+ExecStart=%h/grok-register/.venv/bin/python %h/grok-register/auto_replenish.py --daemon 600
+Restart=on-failure
+RestartSec=15
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

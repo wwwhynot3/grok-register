@@ -1,0 +1,10 @@
+# 每小时余额检查
+[Unit]
+Description=Grok balance monitor hourly timer
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,30 @@
+# Environment
+.env
+
+# Secrets & runtime data
+keys/
+auths/
+pending_codes.json
+.action_id.cache
+.gocache/
+
+# Logs
+*.log
+*.err.log
+logs/
+
+# Temp
+.temp/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+.node_history.json

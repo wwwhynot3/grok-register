@@ -269,17 +269,18 @@ uv run python status.py --json       # 机器可读 JSON(给脚本/AI)
   ● vps-grok-replenish: active
 ```
 
-## Telegram 集成(两个接口,一对配置)
+## Telegram 集成(统一模块 `telegram.py`,一对配置)
 
-项目里有**两个** Telegram 接口,共用同一对 `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`,职责不同:
+**发送/渲染/分块逻辑统一在 `telegram.py`**,两个入口共用:
 
 | | 推送告警 `alert.py` | 查询机器人 `tg_bot.py` |
 |---|---|---|
-| 方向 | 主动推送(单向) | 你发命令 → 回复(双向) |
-| 机制 | `sendMessage` | `getUpdates` 长轮询 + `sendMessage` 回复 |
-| 触发 | 事件驱动:余额低于阈值、补位熔断、重授权完成/失败 | 你发 `/status` 等命令或中文关键词 |
-| 数据 | 只读 + 写 `.alert_state.json`(冷却去重状态) | 纯只读(复用 status.py,见[状态总览](#状态总览--statuspy)) |
+| 方向 | 主动推送(单向) | 你发命令/点按钮 → 回复(双向) |
+| 触发 | 事件驱动:余额低于阈值、补位熔断、重授权完成/失败 | 你发 `/status` 等命令、中文关键词,或点内联按钮 |
+| 数据 | 只读 + 写 `.alert_state.json`(冷却去重状态) | 纯只读(复用 status.py) |
 | 部署 | 随调用方运行(balance_monitor / reauth daemon / auto_replenish) | systemd 常驻(`deploy/vps-grok-tg-bot.service`) |
+
+**消息渲染**:HTML parse mode——板块标题加粗(`<b>▍状态</b>`)、长行在 `|` 处自动折行(窄窗口友好)、服务状态用 emoji(`🟢`/`⚪`/`🔴`)、查询回复附带内联按钮(点一下即查,免敲命令)。
 
 **为什么共存无冲突**:alert.py 只发消息,tg_bot.py 只收消息(长轮询消费 update offset)——同一 bot token 上两条独立链路,互不干扰。
 
@@ -291,7 +292,7 @@ uv run python status.py --json       # 机器可读 JSON(给脚本/AI)
 
 ### 查询机器人 `tg_bot.py`(你问它答)
 
-配置后常驻,发命令/关键词即回状态(仅 `TELEGRAM_CHAT_ID` 本人可查,他人消息静默忽略):
+配置后常驻,发命令/关键词**或点内联按钮**即回状态(仅 `TELEGRAM_CHAT_ID` 本人可查,他人消息静默忽略):
 
 ```
 /status 或 状态 全部    → 完整状态总览

@@ -98,29 +98,20 @@ def health_summary(hours: int = 24) -> str:
 # ── 发送通道 ──
 
 def send_telegram(text: str) -> bool:
-    """Telegram Bot API 推送。配置 TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID。"""
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-    if not (token and chat_id):
+    """Telegram Bot API 推送。统一发送逻辑在 telegram.send_message(共享分块/HTML)。
+
+    配置 TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID;未配置时仅记日志。"""
+    from telegram import send_message
+    if not (os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+            and os.getenv("TELEGRAM_CHAT_ID", "").strip()):
         log.warning("Telegram 未配置(TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID),跳过推送")
         return False
-    import requests as _r
-    try:
-        r = _r.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": text[:4000],
-                  "disable_web_page_preview": True},
-            timeout=20,
-        )
-        data = r.json()
-        if r.status_code == 200 and data.get("ok"):
-            log.info("Telegram 推送成功")
-            return True
-        log.error("Telegram 推送失败: %s", data.get("description", r.status_code))
-        return False
-    except Exception as e:
-        log.error("Telegram 推送异常: %s", e)
-        return False
+    sent = send_message(text, parse_mode=None)  # 告警保持纯文本,不转义
+    if sent > 0:
+        log.info("Telegram 推送成功(%d 条)", sent)
+        return True
+    log.error("Telegram 推送失败")
+    return False
 
 
 def _smtp_send(subject: str, body: str) -> bool:

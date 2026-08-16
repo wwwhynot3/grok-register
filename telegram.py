@@ -29,23 +29,10 @@ POLL_TIMEOUT = 50
 MAX_CHUNK = 3500  # 单条消息上限 4096,留余量(HTML 转义后可能变长)
 
 # ── 内联按钮(点一下即查,免敲命令) ──
-KB = [
-    [{"text": "📊 状态总览", "callback_data": "all"}],
-    [{"text": "🌊 池水位", "callback_data": "pool"},
-     {"text": "🔄 刷新", "callback_data": "refresh"}],
-    [{"text": "📝 注册", "callback_data": "register"},
-     {"text": "🎨 铸造", "callback_data": "mint"}],
-    [{"text": "⚡ API 调用", "callback_data": "api"},
-     {"text": "💰 余额", "callback_data": "balance"}],
-    [{"text": "🖥 节点", "callback_data": "nodes"},
-     {"text": "⚙️ 服务", "callback_data": "services"}],
-    [{"text": "🔁 重授权", "callback_data": "reauth"},
-     {"text": "🔔 告警", "callback_data": "alerts"}],
-]
 
 HELP = """<b>grok-register 状态查询</b>
 
-输入框打 <code>/</code> 会弹出全部命令菜单;或直接发下方关键词/点按钮:
+输入框上方有常驻按钮(点击即发送命令);也可直接发:
 
 /status 或 状态 全部    → 完整状态总览
 /pool 或 水位           → 池水位 vs 阈值
@@ -76,13 +63,21 @@ CMD_MAP = {
     "help": "help", "start": "help", "?": "help", "帮助": "help",
 }
 
-# 每条回复底部的命令提示脚注(让 / 命令在消息里可见,不只有按钮)
-CMD_FOOTER = (
-    "\n\n—\n<b>命令</b>: <code>/status</code> <code>/pool</code> <code>/refresh</code> "
-    "<code>/register</code> <code>/mint</code> <code>/api</code> <code>/balance</code> "
-    "<code>/nodes</code> <code>/services</code> <code>/reauth</code> <code>/alerts</code>\n"
-    "输入框打 <code>/</code> 可弹出全部说明;也可点下方按钮"
-)
+# 回复键盘(常驻输入区上方):点击 = 直接发送对应命令文本,由普通消息路径处理
+KB_REPLY = {
+    "keyboard": [
+        [{"text": "📊 /status"}, {"text": "🌊 /pool"}, {"text": "🔄 /refresh"}],
+        [{"text": "📝 /register"}, {"text": "🎨 /mint"}, {"text": "⚡ /api"}],
+        [{"text": "💰 /balance"}, {"text": "🖥 /nodes"}, {"text": "⚙️ /services"}],
+        [{"text": "🔁 /reauth"}, {"text": "🔔 /alerts"}, {"text": "❓ /help"}],
+    ],
+    "resize_keyboard": True,
+    "is_persistent": True,
+    "input_field_placeholder": "点按钮,或输入 / 命令",
+}
+
+# 每条回复底部的提示脚注(命令本体在回复键盘按钮上可见)
+CMD_FOOTER = "\n\n—\n点下方按钮直接发送命令;输入框打 <code>/</code> 可弹出全部说明"
 
 # Telegram 原生命令菜单(输入 / 时弹出的提示):command 仅限小写字母/数字/下划线
 BOT_COMMANDS = [
@@ -187,7 +182,12 @@ def handle_text(text):
     raw = (text or "").strip()
     if not raw:
         return "help"
-    return CMD_MAP.get(raw.lstrip("/").split()[0].lower(), "help")
+    # 扫描所有 token:按钮标签带 emoji 前缀(如 "📊 /status"),首个 token 可能不是命令
+    for tok in raw.split():
+        cmd = CMD_MAP.get(tok.lstrip("/").lower())
+        if cmd:
+            return cmd
+    return "help"
 
 
 def make_reply(section):
@@ -196,30 +196,8 @@ def make_reply(section):
 
 
 def process_update(up, token, owner):
-    """单条 update:message(命令/关键词)或 callback_query(按钮)"""
+    """单条 update:message(命令/关键词;回复键盘按钮点击 = 发送命令文本,走同一路径)"""
     t0 = time.time()
-    if "callback_query" in up:
-        cq = up["callback_query"]
-        cid = str((cq.get("message") or {}).get("chat", {}).get("id", ""))
-        if cid != owner:
-            return "ignored-cb"
-        data = (cq.get("data") or "all")
-        try:
-            tg_api(token, "answerCallbackQuery", {"callback_query_id": cq["id"]})
-        except Exception:
-            pass
-        reply = HELP if data == "help" else None
-        if reply is None:
-            try:
-                reply = make_reply(data) + CMD_FOOTER
-            except Exception as e:
-                reply = f"查询失败: {e}"
-        # 回复后保留按钮,方便连续点查
-        send_message(reply, parse_mode="HTML", chat_id=cid, token=token,
-                     reply_markup={"inline_keyboard": KB})
-        print(f"[TG-BOT] 按钮 '{data}' → 已回复 (处理 {time.time()-t0:.1f}s)", flush=True)
-        return data
-
     msg = up.get("message") or {}
     cid = str((msg.get("chat") or {}).get("id", ""))
     text = msg.get("text") or ""
@@ -236,7 +214,7 @@ def process_update(up, token, owner):
         except Exception as e:
             reply = f"查询失败: {e}"
     send_message(reply, parse_mode="HTML", chat_id=cid, token=token,
-                 reply_markup={"inline_keyboard": KB})
+                 reply_markup=KB_REPLY)
     print(f"[TG-BOT] '{text.strip()[:24]}' → {section} (处理 {time.time()-t0:.1f}s)", flush=True)
     return section
 
@@ -253,7 +231,7 @@ def run_query_bot():
     while True:
         try:
             params = {"timeout": POLL_TIMEOUT,
-                      "allowed_updates": json.dumps(["message", "callback_query"])}
+                      "allowed_updates": json.dumps(["message"])}
             if offset:
                 params["offset"] = offset
             updates = tg_api(token, "getUpdates", params, timeout=POLL_TIMEOUT + 20)

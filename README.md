@@ -292,17 +292,17 @@ uv run python status.py --json       # 机器可读 JSON(给脚本/AI)
 
 ### 查询机器人 `tg_bot.py`(你问它答)
 
-配置后常驻,发命令/关键词**或点内联按钮**即回状态(仅 `TELEGRAM_CHAT_ID` 本人可查,他人消息静默忽略)。
+配置后常驻,发命令/关键词**或点输入框上方的常驻回复键盘**(点击即发送对应命令)即回状态(仅 `TELEGRAM_CHAT_ID` 本人可查,他人消息静默忽略)。
 
-**命令提示**:机器人启动时已注册 `setMyCommands`——在 TG 输入框打 **`/`** 会自动弹出全部命令与说明,直接点选即可。以下任一方式等效:
+**命令提示**:机器人启动时已注册 `setMyCommands`——在 TG 输入框打 **`/`** 会自动弹出全部命令与说明;同时输入框上方有**常驻按钮键盘**(📊 /status 🌊 /pool …),点击直接发送命令,不用敲字。以下任一方式等效:
 
 | 方式 | 例子 |
 |---|---|
 | 命令 | `/pool` `/api` `/status` |
 | 中文关键词 | `水位` `调用` `状态` |
-| 内联按钮 | 回复底部点 🌊 池水位 |
+| 回复键盘按钮 | 点输入框上方的 🌊 /pool |
 
-**按钮功能表**(回复里常驻,点一下即查):
+**回复键盘按钮表**(输入框上方常驻,点击即发送命令):
 
 | 按钮 | 对应命令 | 功能 |
 |---|---|---|
@@ -432,6 +432,21 @@ systemctl enable --now vps-mihomo vps-grok2api vps-grok-replenish vps-grok-reaut
 - grok2api 与质量守卫来自各自项目(见[推荐配套](#推荐配套--recommended-companions)),本仓库只提供部署模板
 - grok2api 的 SQLite 按相对路径创建,其 `WorkingDirectory` 必须指向部署目录且保留
 - 本仓库只负责造号;网关侧(egress 代理、质量守卫)见[推荐配套](#推荐配套--recommended-companions)
+
+### 运行时行为与资源占用
+
+**Xvfb 常驻,Chrome 按需。** `xvfb-run` 包裹整个 daemon 进程 → 虚拟显示器全程持有;浏览器只在干活时临时拉起,任务结束即关闭(finally 兜底):
+
+| 状态 | Xvfb | Chrome | 资源账单 |
+|---|---|---|---|
+| 空闲(池满 + 无待重授权) | 每 daemon 1 个,常驻 | **0 个进程** | 2×Xvfb ≈ 几 MB 内存,~0% CPU |
+| 注册窗口(池低于水位) | 常驻 | 每批次拉起,逐号用完即关 | 1 个 Chrome ≈ 300–500MB RSS,1 vCPU 峰值 |
+| 重授权窗口(有 reauthRequired) | 常驻 | 探针一次 + 每账号一次,用完即关 | 同上,窗口短 |
+
+- Chrome 生命周期:任务开始 `spawn` → 渲染/提交 → `browser.close()`(`finally` 兜底,异常也关)——进程终止,临时 profile 由浏览器清理;Chrome **二进制常驻磁盘**(约 500MB,装一次反复用,不重复下载)
+- 清理证据:所有浏览器路径都有显式 `close()`(device_mint 的 mint、reauth_batch 的探针+重铸、grok_free 的注册,后两者还包在 `finally` 里)
+- **进程优先级**(systemd):tg-bot `Nice=-5`(注册窗口期不被 Chrome 饿死),replenish/reauth `Nice=10`(浏览器重活让位)——注:systemd 不支持行内注释,`Nice=10   # 注释` 会导致值失效,注释必须独立成行
+- 残留清理:异常/手动中断可能留下孤儿 Chrome/Xvfb(父进程已死、PPID=1),无害但占内存,`ps -eo pid,ppid,comm | grep -E "[c]hrome|[X]vfb"` 排查后手动 kill
 
 ---
 

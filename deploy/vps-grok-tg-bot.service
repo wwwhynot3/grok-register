@@ -16,6 +16,8 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/grok-register
 EnvironmentFile=/opt/grok-register/.env
+# 负 Nice:注册/重铸拉 Chrome 吃满 1 vCPU 时,bot 仍优先被调度,回复不被饿死
+Nice=-5
 ExecStart=/opt/grok-register/.venv/bin/python tg_bot.py
 Restart=always
 RestartSec=10

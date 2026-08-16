@@ -12,6 +12,7 @@ EnvironmentFile=/opt/grok-register/.env
 ExecStart=/usr/bin/xvfb-run -a /opt/grok-register/.venv/bin/python auto_replenish.py --daemon 600
 Restart=on-failure
 RestartSec=10
+Nice=10   # 浏览器重活让位:不抢 tg-bot/网关 CPU
 
 [Install]
 WantedBy=multi-user.target

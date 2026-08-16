@@ -197,6 +197,7 @@ def make_reply(section):
 
 def process_update(up, token, owner):
     """单条 update:message(命令/关键词)或 callback_query(按钮)"""
+    t0 = time.time()
     if "callback_query" in up:
         cq = up["callback_query"]
         cid = str((cq.get("message") or {}).get("chat", {}).get("id", ""))
@@ -216,7 +217,7 @@ def process_update(up, token, owner):
         # 回复后保留按钮,方便连续点查
         send_message(reply, parse_mode="HTML", chat_id=cid, token=token,
                      reply_markup={"inline_keyboard": KB})
-        print(f"[TG-BOT] 按钮 '{data}' → 已回复", flush=True)
+        print(f"[TG-BOT] 按钮 '{data}' → 已回复 (处理 {time.time()-t0:.1f}s)", flush=True)
         return data
 
     msg = up.get("message") or {}
@@ -236,7 +237,7 @@ def process_update(up, token, owner):
             reply = f"查询失败: {e}"
     send_message(reply, parse_mode="HTML", chat_id=cid, token=token,
                  reply_markup={"inline_keyboard": KB})
-    print(f"[TG-BOT] '{text.strip()[:24]}' → {section}", flush=True)
+    print(f"[TG-BOT] '{text.strip()[:24]}' → {section} (处理 {time.time()-t0:.1f}s)", flush=True)
     return section
 
 

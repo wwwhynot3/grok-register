@@ -232,7 +232,7 @@ uv run python auto_replenish.py --daemon 600    # 每 600s 检查一次
 | `GROK2API_DB` | grok2api 的 SQLite 绝对路径。**Linux 必设**,否则 Web 池计数恒 0 → 无限补位 | grok2api 数据目录 |
 | `GROK_MIN_ACCOUNTS` / `GROK_MIN_FREE_ACCOUNTS` / `GROK_MIN_WEB_ACCOUNTS` | 三池水位 | 按你的目标池大小 |
 | `CLASH_HOST` / `CLASH_PORT` / `CLASH_SECRET` / `CLASH_GROUP` | IP 轮换(可选;无控制器自动禁用) | 你的代理外部控制器 |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | 告警推送(可选) | @BotFather 建 bot |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | 告警+查询 | @BotFather 建 bot;驱动推送告警(alert.py)与查询机器人(tg_bot.py),见[Telegram 集成](#telegram-集成两个接口一对配置) |
 | `GROK_SKIP_NODES` | 实测不可用节点黑名单(精确名,逗号分隔) | 浏览器真实探测失败的节点 |
 
 ---
@@ -269,9 +269,29 @@ uv run python status.py --json       # 机器可读 JSON(给脚本/AI)
   ● vps-grok-replenish: active
 ```
 
-### Telegram 查询机器人 — `tg_bot.py`
+## Telegram 集成(两个接口,一对配置)
 
-配置 `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` 后常驻,在 TG 里发命令/关键词即回状态(仅本人可查,复用 status.py 数据):
+项目里有**两个** Telegram 接口,共用同一对 `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`,职责不同:
+
+| | 推送告警 `alert.py` | 查询机器人 `tg_bot.py` |
+|---|---|---|
+| 方向 | 主动推送(单向) | 你发命令 → 回复(双向) |
+| 机制 | `sendMessage` | `getUpdates` 长轮询 + `sendMessage` 回复 |
+| 触发 | 事件驱动:余额低于阈值、补位熔断、重授权完成/失败 | 你发 `/status` 等命令或中文关键词 |
+| 数据 | 只读 + 写 `.alert_state.json`(冷却去重状态) | 纯只读(复用 status.py,见[状态总览](#状态总览--statuspy)) |
+| 部署 | 随调用方运行(balance_monitor / reauth daemon / auto_replenish) | systemd 常驻(`deploy/vps-grok-tg-bot.service`) |
+
+**为什么共存无冲突**:alert.py 只发消息,tg_bot.py 只收消息(长轮询消费 update offset)——同一 bot token 上两条独立链路,互不干扰。
+
+### 推送告警 `alert.py`(谁调用谁发)
+
+- **事件清单**:LuckMail/YesCaptcha 余额低于阈值(停补水)、补位零增长熔断/恢复、重授权轮次完成/部分失败
+- **冷却去重**:同类告警默认 1h 内只发一次(`ALERT_COOLDOWN_SECONDS`),防批量事件刷屏
+- SMTP 兜底:未配 Telegram 或发送失败时走邮件(需 `SMTP_*` + `ALERT_EMAIL_TO`)
+
+### 查询机器人 `tg_bot.py`(你问它答)
+
+配置后常驻,发命令/关键词即回状态(仅 `TELEGRAM_CHAT_ID` 本人可查,他人消息静默忽略):
 
 ```
 /status 或 状态 全部    → 完整状态总览
@@ -291,7 +311,7 @@ uv run python status.py --json       # 机器可读 JSON(给脚本/AI)
 uv run python tg_bot.py     # 常驻;或 systemd: deploy/vps-grok-tg-bot.service
 ```
 
-与 alert.py 推送共存无冲突(一个长轮询收命令,一个 sendMessage 发告警)。
+查询**纯只读**,不会触发任何注册/铸造/刷新/重授权动作。
 
 ### 注册
 

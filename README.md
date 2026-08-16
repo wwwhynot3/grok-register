@@ -132,8 +132,9 @@ grok-register/
 | 项 | 要求 | 自检命令(期望输出) |
 |---|---|---|
 | Python | ≥ 3.10 | `python3 --version` → `Python 3.10+` |
-| 包管理器 | [uv](https://docs.astral.sh/uv/)(或 pip) | `uv --version` → `uv x.y.z` |
-| 浏览器 | 系统 Chrome/Chromium(铸造必需;无则自动降级,CF 拦截率上升) | `google-chrome --version` 或 `chromium --version` |
+| 包管理器 | [uv](https://docs.astral.sh/uv/)(必需,依赖锁定用) | `uv --version` → `uv x.y.z` |
+| 浏览器 | 系统 Chrome/Chromium(铸造必需;无则自动降级,CF 拦截率上升;精简 Linux 缺库时先装系统 Chrome,见[实战要点](#实战要点踩坑记录) #6) | `google-chrome --version` 或 `chromium --version` |
+| Xvfb | 无显示器环境必需(服务器/远程):有头浏览器渲染用 | `which Xvfb xvfb-run` → 两条路径 |
 | 代理 | 任一 Clash/mihomo 实例,含干净节点(见[实战要点](#实战要点踩坑记录)) | 见 Step 3 |
 | 账号 | YesCaptcha key(注册用);LuckMail/MailNest key(按邮箱商) | 见 Step 2 |
 
@@ -142,7 +143,7 @@ grok-register/
 ```bash
 git clone https://github.com/wwwhynot3/grok-register.git
 cd grok-register
-uv sync            # 或: pip install -r <(uv export --format requirements-txt)
+uv sync            # 依赖锁定在 pyproject.toml + uv.lock,uv 必需
 ```
 
 **完成判据**:`uv run python -c "import curl_cffi, patchright"` 无报错。
@@ -155,6 +156,7 @@ cp .env.example .env
 #   YESCAPTCHA_KEY=        # https://yescaptcha.com 获取
 #   EMAIL_PROVIDER + LUCKMAIL_API_KEY 或 MAILNEST_API_KEY   # 邮箱商
 #   GROK_PROXY=            # 指向你的 Clash/mihomo 混合端口
+# 可选:想启用注册前自动换 IP,再配 CLASH_GROUP/CLASH_SECRET(见配置表;不配则固定出口)
 ```
 
 **完成判据**:`.env` 里三组值都已填且非空。(完整键清单见 `.env.example` 注释,每个键都有获取方式说明。)
@@ -174,6 +176,8 @@ uv run python grok_free.py --count 1
 ```
 
 **完成判据**:`keys/accounts.txt` 末尾新增一行 `email:password:sso`。失败先看是否 CF 拦截或验证码未达(邮箱商问题),不要盲目重试烧邮箱配额。
+
+> 💰 **每次注册有真实成本**(买邮箱约 $0.024 + 打码约 $0.004),建议先用 `--count 1` 验证链路再批量。
 
 ### Step 5 — 铸造 OAuth Token
 
@@ -482,6 +486,9 @@ systemctl enable --now vps-mihomo vps-grok2api vps-grok-replenish vps-grok-reaut
 ---
 
 ## FAQ
+
+**Q: 注册流程会不会被封?模仿真实流程还不够稳吗?**
+模仿的是流程,但判定权在 x.ai 手里——他们不需要证明你是机器人,只需要让某一环**悄悄不产出**(接口照常 200 但邮件不发、单日发码配额硬顶、按 IP 段/UA 集群降权)。本仓库已实历五轮收紧:gRPC 发码被静默封杀、PKCE 路径被 CF 拦截(已删)、gmail 变体/self_built 域名被拉黑、TLS 指纹过时 403、每日发码配额 ~20-25 个。应对靠**多路径 + 快速适配**:引擎可换(grok_free 主通道/grok.py 备用)、邮箱商可换(ms_imap 买断当前可用)、指纹可换(`GROK_IMPERSONATE`)、节点可换(轮换组)。哪天 `grok_free.py` 产出为零,按[故障排查](#故障排查--troubleshooting)逐项换路,别在死路上重试烧钱。
 
 **Q: 免费号能调哪些模型?**
 注册即得基础档。经 grok2api:SSO 直接进 Web 池(`grok-chat-fast` / `grok-imagine-image`);铸造后进 Build 池(`grok-4.6` 等,有速率限制)。付费模型需 SuperGrok/Heavy 订阅账号。

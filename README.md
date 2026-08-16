@@ -35,24 +35,24 @@
 
 ```mermaid
 flowchart LR
-    subgraph 注册 Registration
+    subgraph "注册 Registration"
         A1[买断 ms_imap 邮箱<br/>LuckMail 0.02/号] --> A2[浏览器表单发码<br/>headed + Xvfb,每号换 IP]
         A2 --> A3[邮件 subject 提取验证码]
         A3 --> A4[YesCaptcha 解 Turnstile<br/>与等码并行]
         A4 --> A5[浏览器内直 POST<br/>提取 SSO]
         A5 --> B[keys/accounts.txt<br/>email:password:sso]
     end
-    subgraph 铸造 Minting
+    subgraph "铸造 Minting"
         B --> C[device_mint.py --all<br/>Device Flow 自动授权]
         C -->|每账号一个 JSON| D[auths/xai-*.json<br/>AT + RT]
     end
-    subgraph 网关 Gateway (grok2api)
+    subgraph "网关 Gateway (grok2api)"
         D -->|auto_replenish 推送| E[Build 池]
         B -->|SSO 直接推| E2[Web 池]
         E --> F[模型 API]
         E2 --> F
     end
-    subgraph 维护 Maintenance
+    subgraph "维护 Maintenance"
         E -.池低于水位.-> A1
         F -.AT 将过期.-> G[grok2api 自治刷新<br/>经 egress 节点代理出口]
     end

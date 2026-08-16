@@ -277,6 +277,7 @@ uv run python reauth_batch.py --daemon 600   # 常驻:每 600s 扫描并自动�
 
 - 链路:SSO(存于 `keys/accounts.txt` 未丢)→ Device Flow 自动授权 → 推回网关,约 45s/号
 - **自动化**:`--daemon` 模式常驻扫描,发现 reauthRequired 自动处理。与补位守护错峰——Build 池低于免费水位且补位在跑时自动让位;单实例文件锁防重入;空闲零成本(无待处理时只查 DB)
+- **告警**:每轮完成后经 Telegram/SMTP 推送结果(`✅ 重授权完成` / `⚠️ 部分失败`,alert.py 冷却去重;未配置则仅日志)
 - systemd:`deploy/vps-grok-reauth.service`(vps-grok-replenish 同款环境)
 - 一次性小批量手动场景用 `remint_oauth.py`(编辑顶部 `NEED` 数组)
 

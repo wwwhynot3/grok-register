@@ -17,6 +17,7 @@ from clash_rotator import switch_node, get_current_ip, list_nodes
 from device_mint import sso_to_device, _http_json, CLIENT_ID, SCOPE
 from auth_store import save_auth
 from auto_replenish import push_to_grok2api
+from alert import notify
 from patchright.async_api import async_playwright
 
 DB = os.getenv("GROK2API_DB") or os.path.join(_BASE, "data", "backend.db")  # 未设 GROK2API_DB 时用本地路径(会明显报错而非连错库)
@@ -89,7 +90,7 @@ def run(limit=None):
     print('待重授权:', len(emails))
     if not emails:
         print('无待处理账号')
-        return
+        return 0, 0
     sso_map = load_sso_map()
     nodes, now = list_nodes()
     # 候选: 家宽 + 原生优先, 剔除硬拦截嫌疑
@@ -100,7 +101,7 @@ def run(limit=None):
     print('好节点池:', len(good), flush=True)
     if not good:
         print('无可用节点, 中止')
-        return
+        return 0, 0
 
     ok_cnt = fail_cnt = 0
     fails = []
@@ -148,6 +149,7 @@ def run(limit=None):
         print('失败列表:')
         for e in fails:
             print('  ', e)
+    return ok_cnt, fail_cnt
 
 
 def count_build_active():
@@ -194,9 +196,14 @@ def run_daemon(interval=600):
                       % (pool, threshold), flush=True)
             else:
                 try:
-                    run(limit=5)   # 每轮最多 5 个,防浏览器长时间独占
+                    ok_cnt, fail_cnt = run(limit=5)   # 每轮最多 5 个,防浏览器长时间独占
+                    if ok_cnt or fail_cnt:
+                        subject = ("✅ 重授权完成:OK=%d FAIL=%d" % (ok_cnt, fail_cnt)) if fail_cnt == 0 \
+                            else ("⚠️ 重授权部分失败:OK=%d FAIL=%d(下轮自动重试)" % (ok_cnt, fail_cnt))
+                        notify("reauth_round", subject, cooldown=3600)
                 except Exception as e:
                     print("[REAUTH-DAEMON] 本轮异常: %s" % e, flush=True)
+                    notify("reauth_round", "⚠️ 重授权轮次异常: %s" % e, cooldown=3600)
         else:
             print("[REAUTH-DAEMON] 无 reauthRequired 账号", flush=True)
         time.sleep(interval)
